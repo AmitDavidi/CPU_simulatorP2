@@ -1,0 +1,3 @@
+﻿  main.c
+C:\Github\SimulatorPart2\SimulatorPart2\main.c(277): warning C4715: 'execute': not all control paths return a value
+  SimulatorPart2.vcxproj -> C:\Github\SimulatorPart2\Debug\SimulatorPart2.exe
