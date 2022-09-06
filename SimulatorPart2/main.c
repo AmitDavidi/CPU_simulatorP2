@@ -4,10 +4,10 @@
 #include <string.h>
 #include <time.h>
 
-#define MAX_NUM_OF_INSTRUCTIONS 4096
-#define MAX_INSTRUCTION_LENGTH 12
-#define MAX_MEMORY_LENGTH 4096
-#define MEMORY_LINE_LENGTH 8
+#define IMEMIN_NUMBER_OF_LINES 4096
+#define IMEMIN_LINE_SIZE 12
+#define DMEMIN_NUMBER_OF_LINES 4096
+#define DMEMIN_LINE_SIZE 8
 
 #define   irq0enable     IORegister[0] 
 #define   irq1enable     IORegister[1]
@@ -410,17 +410,12 @@ int main(int argc, char* argv[]) {
 
 	// iterate over instructions store inside an array
 
-	char* instructions[MAX_NUM_OF_INSTRUCTIONS];
-	store_file_into_string_array(imemin, instructions, MAX_NUM_OF_INSTRUCTIONS, MAX_INSTRUCTION_LENGTH);
-	int i = 0;
-	while (i < 4096) {
-		printf("%d, %s\n", i, instructions[i]);
-		i++;
-	}
+	char** instructions = (char**)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(char*));
+	store_file_into_string_array(imemin, instructions, IMEMIN_NUMBER_OF_LINES, IMEMIN_LINE_SIZE);
 
 	// store RAM inside array
-	int MEM[MAX_MEMORY_LENGTH] = { 0 };
-	store_file_into_integer_array(dmemin, MEM, MAX_MEMORY_LENGTH, MEMORY_LINE_LENGTH);
+	int* MEM = (int*)calloc(DMEMIN_NUMBER_OF_LINES , sizeof(int));
+	store_file_into_integer_array(dmemin, MEM, DMEMIN_NUMBER_OF_LINES, DMEMIN_LINE_SIZE);
 
 
 
@@ -431,7 +426,7 @@ int main(int argc, char* argv[]) {
 	int rd = 0, rs = 0, rt = 0, rm = 0;
 	unsigned int IORegister[23] = { 0 };
 
-	char* current_instruction;
+	char* current_instruction = (char*)malloc(IMEMIN_LINE_SIZE + 1);
 	int handling_interrupt = 0;
 	int disk_writing_timer = 0;
 
@@ -458,7 +453,8 @@ int main(int argc, char* argv[]) {
 		}
 
 		// fetch decode execute
-		current_instruction = instructions[PC]; // fetch
+		strcpy(current_instruction, instructions[PC]); // fetch
+
 		decode(&opcode, &rd, &rs, &rt, &rm, current_instruction, SIMPRegisters); // decode
 
 		halt_flag = execute(opcode, rd, rs, rt, rm, IORegister, SIMPRegisters, &PC, MEM, &handling_interrupt); // execute
@@ -481,12 +477,13 @@ int main(int argc, char* argv[]) {
 
 
 
-
 	// free instructions
-	for (int k = 0; k < MAX_NUM_OF_INSTRUCTIONS; k++) {
-		printf("reached %d\n", k); // weird part T_T 
+	for (int k = 0; k < IMEMIN_NUMBER_OF_LINES; k++)
 		free(instructions[k]);
-	}
+
+	free(instructions);
+	free(current_instruction);
+	free(MEM);
 
 	// close files
 	for (int k = 0; k < 14; k++)
