@@ -8,6 +8,8 @@
 #define IMEMIN_LINE_SIZE 12
 #define DMEMIN_NUMBER_OF_LINES 4096
 #define DMEMIN_LINE_SIZE 8
+#define DISKIN_NUMBER_OF_LINES 4096
+#define DISKIN_LINE_SIZE 8
 
 #define   irq0enable     IORegister[0] 
 #define   irq1enable     IORegister[1]
@@ -288,15 +290,23 @@ void snip_nl(char* string) {
 }
 
 
-// this function gets a source file filled with hex:strings
+// this function gets a source file filled with <numberFormat>:strings
 // updates a result array with those strings.
 // fills the rest with zeros
-void store_file_into_integer_array(FILE* source_file, unsigned int* result_array, int arraySize, int bufferLength)
+// stores the Size of non-zero elements inside <resultSize>
+void store_file_into_integer_array(FILE* source_file, unsigned int* result_array, int arraySize, int bufferLength, int numberFormat, int *resultSize)
 {
-	char* buffer = (char*)malloc((1 + bufferLength) * sizeof(char));
+	char* buffer = (char*)malloc((2 + bufferLength) * sizeof(char)); // + 2 because new line and end of string
 	int i = 0;
-	while (fgets(buffer, bufferLength + 1, source_file))
-		result_array[i++] = strtol(buffer, NULL, 16);
+	while (fgets(buffer, bufferLength + 2, source_file)) {
+		if (buffer[0] == '\n')
+			break;
+
+		result_array[i++] = strtol(buffer, NULL, numberFormat);
+	}
+	
+	if (resultSize != NULL)
+		*resultSize = i;
 
 	while (i < arraySize) // zero out the rest of the memory
 		result_array[i++] = 0;
@@ -331,8 +341,6 @@ void store_file_into_string_array(FILE* source_file, char** result_array, const 
 		idx++;
 	}
 
-	
-
 	// store strings of zeros after the last line
 	for (int i = 0; i < bufferLength; i++)
 		buffer[i] = '0';
@@ -353,7 +361,6 @@ void store_file_into_string_array(FILE* source_file, char** result_array, const 
 
 		idx++;
 	}
-
 	free(buffer);
 	/*
 	for (int i = 0; i < arraySize; i++) {
@@ -371,6 +378,7 @@ void store_file_into_string_array(FILE* source_file, char** result_array, const 
 
 
 int main(int argc, char* argv[]) {
+	// argv: imemin.txt dmemin.txt diskin.txt irq2in.txt dmemout.txt regout.txt trace.txt hwregtrace.txt cycles.txt leds.txt display7seg.txt diskout.txt monitor.txt monitor.yuv
 	if (argc < 15) {
 		printf("Input incomplete");
 		exit(1);
@@ -410,13 +418,28 @@ int main(int argc, char* argv[]) {
 
 	// iterate over instructions store inside an array
 
-	char** instructions = (char**)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(char*));
-	store_file_into_string_array(imemin, instructions, IMEMIN_NUMBER_OF_LINES, IMEMIN_LINE_SIZE);
+	char** instructions = (char**)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(char*)); // free
+	store_file_into_string_array(imemin, instructions, IMEMIN_NUMBER_OF_LINES, IMEMIN_LINE_SIZE, 1);
 
 	// store RAM inside array
-	int* MEM = (int*)calloc(DMEMIN_NUMBER_OF_LINES , sizeof(int));
-	store_file_into_integer_array(dmemin, MEM, DMEMIN_NUMBER_OF_LINES, DMEMIN_LINE_SIZE);
+	int* MEM = (int*)malloc(DMEMIN_NUMBER_OF_LINES * sizeof(int)); // free
+	store_file_into_integer_array(dmemin, MEM, DMEMIN_NUMBER_OF_LINES, DMEMIN_LINE_SIZE, 16, NULL);
 
+	// store diskin inside array
+
+	int *DISK = (int*)calloc(DISKIN_NUMBER_OF_LINES, sizeof(int)); // free later
+	store_file_into_integer_array(diskin, DISK, DISKIN_NUMBER_OF_LINES, DISKIN_LINE_SIZE, 16, NULL);
+
+	int* irq2in_on_time = (int*)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(int)); // for now 100
+	int irq2in_on_timeSize = 0;
+	store_file_into_integer_array(irq2in, irq2in_on_time, IMEMIN_NUMBER_OF_LINES, 5, 10, &irq2in_on_timeSize); // max is 5 numbers of buffer - 4096\0
+
+	int i = 0;
+	while (i < 10)
+		printf("%d\n", irq2in_on_time[i++]);
+	printf("%d", irq2in_on_timeSize);
+
+	exit(1);
 
 
 	int SIMPRegisters[16] = { 0 };
@@ -426,7 +449,7 @@ int main(int argc, char* argv[]) {
 	int rd = 0, rs = 0, rt = 0, rm = 0;
 	unsigned int IORegister[23] = { 0 };
 
-	char* current_instruction = (char*)malloc(IMEMIN_LINE_SIZE + 1);
+	char* current_instruction = (char*)malloc(IMEMIN_LINE_SIZE + 1); // free
 	int handling_interrupt = 0;
 	int disk_writing_timer = 0;
 
@@ -441,6 +464,7 @@ int main(int argc, char* argv[]) {
 		else if (timerenable) {
 			timercurrent++;
 		}
+
 
 		if (timercurrent == 100 || timercurrent == 200 || timercurrent == 300 || timercurrent == 400 || timercurrent == 500 || timercurrent == 600 || timercurrent == 700 || timercurrent == 800)
 			irq2enable = 1;
@@ -483,6 +507,7 @@ int main(int argc, char* argv[]) {
 
 	free(instructions);
 	free(current_instruction);
+
 	free(MEM);
 
 	// close files
