@@ -79,7 +79,8 @@ void decode(int* opcode, int* rd, int* rs, int* rt, int* rm, char* instruction, 
 	buffer[2] = instruction[8];
 	buffer[3] = 0;
 	R[1] = strtol(buffer, NULL, 16);
-
+	if (buffer[0] > '7')
+		R[1] |= 0xFFFFF000; // sign extension for imm1
 
 
 	buffer[0] = instruction[9];
@@ -87,7 +88,8 @@ void decode(int* opcode, int* rd, int* rs, int* rt, int* rm, char* instruction, 
 	buffer[2] = instruction[11];
 	buffer[3] = 0;
 	R[2] = strtol(buffer, NULL, 16);
-
+	if (buffer[0] > '7')
+		R[2] |= 0xFFFFF000; // sign extension for imm2
 
 
 }
@@ -151,7 +153,7 @@ int execute(int opcode, int rd, int rs, int rt, int rm,  int* IORegister, int* R
 
 	case(7): // sra
 		if (rd > 2)
-			R[rd] = (R[rs] >> R[rt]);
+			R[rd] = (R[rs] >> R[rt]); // arithmetic shift with sign extension
 		(*pc)++;
 		return 0;
 
@@ -373,6 +375,16 @@ void store_file_into_string_array(FILE* source_file, char** result_array, const 
 }
 
 
+// searches an array O(n)
+int isInArray(int num, int* arr, int arrSize) {
+	for (int i = 0; i < arrSize; i++)
+	{
+		if (arr[i] == num)
+			return 1;
+	}
+	return 0;
+
+}
 
 
 
@@ -416,30 +428,26 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	// iterate over instructions store inside an array
-
+	// store imemin inside an array
 	char** instructions = (char**)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(char*)); // free
 	store_file_into_string_array(imemin, instructions, IMEMIN_NUMBER_OF_LINES, IMEMIN_LINE_SIZE, 1);
+
 
 	// store RAM inside array
 	int* MEM = (int*)malloc(DMEMIN_NUMBER_OF_LINES * sizeof(int)); // free
 	store_file_into_integer_array(dmemin, MEM, DMEMIN_NUMBER_OF_LINES, DMEMIN_LINE_SIZE, 16, NULL);
 
-	// store diskin inside array
 
+	// store diskin inside array
 	int *DISK = (int*)calloc(DISKIN_NUMBER_OF_LINES, sizeof(int)); // free later
 	store_file_into_integer_array(diskin, DISK, DISKIN_NUMBER_OF_LINES, DISKIN_LINE_SIZE, 16, NULL);
 
+
+	// store irq2in iside array
 	int* irq2in_on_time = (int*)malloc(IMEMIN_NUMBER_OF_LINES * sizeof(int)); // for now 100
 	int irq2in_on_timeSize = 0;
 	store_file_into_integer_array(irq2in, irq2in_on_time, IMEMIN_NUMBER_OF_LINES, 5, 10, &irq2in_on_timeSize); // max is 5 numbers of buffer - 4096\0
 
-	int i = 0;
-	while (i < 10)
-		printf("%d\n", irq2in_on_time[i++]);
-	printf("%d", irq2in_on_timeSize);
-
-	exit(1);
 
 
 	int SIMPRegisters[16] = { 0 };
@@ -448,7 +456,6 @@ int main(int argc, char* argv[]) {
 	int opcode = 0;
 	int rd = 0, rs = 0, rt = 0, rm = 0;
 	unsigned int IORegister[23] = { 0 };
-
 	char* current_instruction = (char*)malloc(IMEMIN_LINE_SIZE + 1); // free
 	int handling_interrupt = 0;
 	int disk_writing_timer = 0;
@@ -456,6 +463,7 @@ int main(int argc, char* argv[]) {
 
 	// FDE procedure
 	while (halt_flag != 1) {
+		
 		// handle clock
 		if (timercurrent == timermax) {
 			irq0status = 1;
@@ -466,8 +474,10 @@ int main(int argc, char* argv[]) {
 		}
 
 
-		if (timercurrent == 100 || timercurrent == 200 || timercurrent == 300 || timercurrent == 400 || timercurrent == 500 || timercurrent == 600 || timercurrent == 700 || timercurrent == 800)
+		if (isInArray(timercurrent, irq2in_on_time, irq2in_on_timeSize)) {
+			printf("ayyyy: %d\n", timercurrent);
 			irq2enable = 1;
+		}
 
 		// handle interrupts
 		if (handling_interrupt == 0 && (irq0enable & irq0status | irq1enable & irq2status | irq2enable & irq2status)) {
@@ -495,6 +505,7 @@ int main(int argc, char* argv[]) {
 
 			}
 		}
+		irq2enable = 0; // allways resets back to 0 at the end of a clock cycle.
 
 	}
 
